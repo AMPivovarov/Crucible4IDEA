@@ -19,9 +19,13 @@ import com.intellij.ui.AnActionButton;
 import com.intellij.ui.table.JBTable;
 import com.jetbrains.crucible.model.Comment;
 import com.jetbrains.crucible.model.Review;
-import com.jetbrains.crucible.ui.toolWindow.details.*;
+import com.jetbrains.crucible.ui.toolWindow.details.CommentBalloonBuilder;
+import com.jetbrains.crucible.ui.toolWindow.details.CommentForm;
+import com.jetbrains.crucible.ui.toolWindow.details.CommentsTree;
+import com.jetbrains.crucible.ui.toolWindow.details.GeneralCommentsTree;
 import com.jetbrains.crucible.ui.toolWindow.diff.ReviewGutterIconRenderer;
 import com.jetbrains.crucible.utils.CrucibleBundle;
+import gnu.trove.TIntFunction;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -43,16 +47,27 @@ public class AddCommentAction extends AnActionButton implements DumbAware {
   private final Review myReview;
   private final boolean myIsReply;
   @Nullable private final FilePath myFilePath;
+  @Nullable private final TIntFunction myLineToEditor;
+  @Nullable private final TIntFunction myLineFromEditor;
 
   public AddCommentAction(@NotNull final Review review, @Nullable final Editor editor,
                           @Nullable FilePath filePath, @NotNull final String description,
                           boolean isReply) {
+    this(review, editor, filePath, description, isReply, null, null);
+  }
+
+  public AddCommentAction(@NotNull final Review review, @Nullable final Editor editor,
+                          @Nullable FilePath filePath, @NotNull final String description,
+                          boolean isReply,
+                          @Nullable TIntFunction lineToEditor, @Nullable TIntFunction lineFromEditor) {
     super(description, description, isReply ? IconLoader.getIcon("/images/comment_reply.png") :
                                               IconLoader.getIcon("/images/comment_add.png"));
     myFilePath = filePath;
     myIsReply = isReply;
     myReview = review;
     myEditor = editor;
+    myLineToEditor = lineToEditor;
+    myLineFromEditor = lineFromEditor;
   }
 
   public void actionPerformed(AnActionEvent e) {
@@ -69,7 +84,7 @@ public class AddCommentAction extends AnActionButton implements DumbAware {
   }
 
   private void addGeneralComment(@NotNull final Project project, DataContext dataContext) {
-    final CommentForm commentForm = new CommentForm(project, true, myIsReply, null);
+    final CommentForm commentForm = new CommentForm(project, true, myIsReply, null, myLineFromEditor);
     commentForm.setReview(myReview);
 
     if (myIsReply) {
@@ -109,7 +124,7 @@ public class AddCommentAction extends AnActionButton implements DumbAware {
 
   private void addVersionedComment(@NotNull final Project project) {
     if (myEditor == null || myFilePath == null) return;
-    final CommentForm commentForm = new CommentForm(project, false, myIsReply, myFilePath);
+    final CommentForm commentForm = new CommentForm(project, false, myIsReply, myFilePath, myLineFromEditor);
     commentForm.setReview(myReview);
 
     final JComponent contextComponent = getContextComponent();
@@ -129,14 +144,8 @@ public class AddCommentAction extends AnActionButton implements DumbAware {
       public void onClosed(LightweightWindowEvent event) {
         final Comment comment = commentForm.postComment();
         if (!myIsReply) {
-          final MarkupModel markup = myEditor.getMarkupModel();
           if (comment != null) {
-            final RangeHighlighter highlighter = markup.addLineHighlighter(Integer.parseInt(comment.getLine()) - 1,
-                                                                           HighlighterLayer.ERROR + 1, null);
-
-            final ReviewGutterIconRenderer gutterIconRenderer =
-              new ReviewGutterIconRenderer(myReview, myFilePath, comment);
-            highlighter.setGutterIconRenderer(gutterIconRenderer);
+            addCommentHighlighter(myEditor, comment, myReview, myFilePath, myLineToEditor);
           }
         }
         else {
@@ -171,5 +180,27 @@ public class AddCommentAction extends AnActionButton implements DumbAware {
     //  }
     //}
     return true;
+  }
+
+  @NotNull
+  public static RangeHighlighter addCommentHighlighter(@NotNull Editor editor,
+                                           @NotNull Comment comment,
+                                           @NotNull Review review,
+                                           @NotNull FilePath filePath) {
+    return addCommentHighlighter(editor, comment, review, filePath, null);
+  }
+
+  @NotNull
+  public static RangeHighlighter addCommentHighlighter(@NotNull Editor editor,
+                                                       @NotNull Comment comment,
+                                                       @NotNull Review review,
+                                                       @NotNull FilePath filePath,
+                                                       @Nullable TIntFunction lineToEditor) {
+    int line = Integer.parseInt(comment.getLine()) - 1;
+    if (lineToEditor != null) line = lineToEditor.execute(line);
+    final RangeHighlighter highlighter = editor.getMarkupModel().addLineHighlighter(line, HighlighterLayer.ERROR + 1, null);
+    final ReviewGutterIconRenderer gutterIconRenderer = new ReviewGutterIconRenderer(review, filePath, comment);
+    highlighter.setGutterIconRenderer(gutterIconRenderer);
+    return highlighter;
   }
 }

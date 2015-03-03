@@ -104,10 +104,7 @@ public class CommentsDiffTool implements FrameDiffTool, SuppressiveDiffTool {
         if (path != null && filePath.getPath().endsWith(path) &&
             (review.isInPatch(comment) || revision.getRevisionNumber().asString().equals(comment.getRevision()))) {
 
-          int line = Integer.parseInt(comment.getLine()) - 1;
-          final RangeHighlighter highlighter = editor2.getMarkupModel().addLineHighlighter(line, HighlighterLayer.ERROR + 1, null);
-          final ReviewGutterIconRenderer gutterIconRenderer = new ReviewGutterIconRenderer(review, filePath, comment);
-          highlighter.setGutterIconRenderer(gutterIconRenderer);
+          AddCommentAction.addCommentHighlighter(editor2, comment, review, filePath);
         }
       }
     }

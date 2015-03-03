@@ -16,6 +16,7 @@ import com.jetbrains.crucible.connection.CrucibleManager;
 import com.jetbrains.crucible.model.Comment;
 import com.jetbrains.crucible.model.Review;
 import com.jetbrains.crucible.model.User;
+import gnu.trove.TIntFunction;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -50,13 +51,19 @@ public class CommentForm extends JPanel {
 
   private Review myReview;
   private Comment myParentComment;
+  @Nullable private final TIntFunction myLineFromEditor;
 
   public CommentForm(@NotNull Project project, boolean isGeneral, boolean isReply, @Nullable FilePath filePath) {
+    this(project, isGeneral, isReply, filePath, null);
+  }
+
+  public CommentForm(@NotNull Project project, boolean isGeneral, boolean isReply, @Nullable FilePath filePath, @Nullable TIntFunction lineFromEditor) {
     super(new BorderLayout());
     myProject = project;
     myGeneral = isGeneral;
     myReply = isReply;
     myFilePath = filePath;
+    myLineFromEditor = lineFromEditor;
 
     final EditorTextFieldProvider service = ServiceManager.getService(project, EditorTextFieldProvider.class);
     final Set<EditorCustomization> editorFeatures = ContainerUtil.newHashSet();
@@ -94,8 +101,9 @@ public class CommentForm extends JPanel {
     }
     if (myEditor != null) {
       final Document document = myEditor.getDocument();
-      final int lineNumber = document.getLineNumber(myEditor.getCaretModel().getOffset()) + 1;
-      comment.setLine(String.valueOf(lineNumber));
+      int lineNumber = document.getLineNumber(myEditor.getCaretModel().getOffset());
+      if (myLineFromEditor != null) lineNumber = myLineFromEditor.execute(lineNumber);
+      comment.setLine(String.valueOf(lineNumber + 1));
       final String id = myReview.getIdByPath(myFilePath.getPath(), myProject);
       comment.setReviewItemId(id);
     }
